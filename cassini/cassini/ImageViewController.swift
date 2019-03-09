@@ -17,10 +17,22 @@ class ImageViewController: UIViewController {
             }
         }
     }
+    @IBOutlet weak var spinner: UIActivityIndicatorView!
+    
     private func fetchImage(){
-        if let url = imageURL,
-            let imageData = try? Data(contentsOf: url){
-            image = UIImage(data: imageData)
+        if let url = imageURL{
+            // 操作可能很耗时，用户可能不等到结果就返回了，等block回来时，self可能已经不存在了。
+            // 用户可能更改了image的赋值，如果图片地址发生了改变，用户已经不关心原有的地址了
+            // 提醒用户有操作正在进行
+            spinner.startAnimating()
+            // 不论何时给图片赋值，只要给图片赋值了就停止
+            DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+                if let imageData = try? Data(contentsOf: url),self?.imageURL == url{
+                    DispatchQueue.main.async {
+                        self?.image = UIImage(data: imageData)
+                    }
+                }
+            }
         }
     }
     
@@ -28,7 +40,7 @@ class ImageViewController: UIViewController {
         didSet{
             scrollView.addSubview(imageView)
             scrollView.contentSize = imageView.frame.size
-            scrollView.minimumZoomScale = 0.2
+            scrollView.minimumZoomScale = 0.02
             scrollView.maximumZoomScale = 2.0
             scrollView.delegate = self
         }
@@ -42,12 +54,8 @@ class ImageViewController: UIViewController {
             imageView.image = newValue
             imageView.sizeToFit()
             scrollView?.contentSize = imageView.frame.size // when image set, the scorllView may be nil
+            spinner?.stopAnimating()// 在prepare时，outlet都没有，spinner也可能没有被赋值
         }
-    }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        imageURL = DemoURL.demoImageURL // if it in tabController we do not want load view until it will appear
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -57,6 +65,8 @@ class ImageViewController: UIViewController {
         }
     }
 }
+
+
 
 extension ImageViewController:UIScrollViewDelegate {
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {

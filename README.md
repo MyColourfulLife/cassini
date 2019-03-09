@@ -43,3 +43,63 @@ private var image:UIImage? {
     }
 }
 ```
+---
+
+3. 比较耗时的操作，比如下载图片，应当使用多线程技术，避免用户操作卡顿
+4. 比较耗时的操作，当结果返回时，应当检查用户是否已不再关心此操作，或已经切换到其他页面了
+5. 耗时操作，应该状态提示
+```swift
+if let url = imageURL{
+    // 操作可能很耗时，用户可能不等到结果就返回了，等block回来时，self可能已经不存在了。
+    // 用户可能更改了image的赋值，如果图片地址发生了改变，用户已经不关心原有的地址了
+    // 提醒用户有操作正在进行
+    spinner.startAnimating()
+    // 不论何时给图片赋值，只要给图片赋值了就停止
+    DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+            if let imageData = try? Data(contentsOf: url),self?.imageURL == url{
+            // 注意上面的条件判断
+            // 所有的UI操作都要回到主线程
+            DispatchQueue.main.async {
+            self?.image = UIImage(data: imageData)
+            }
+        }
+    }
+}
+```
+注意在图片赋值时，iboutlet可能还没有被hook住，需要使用可选型
+```swift
+private var image:UIImage? {
+    get{
+    return imageView.image
+    }
+    set{
+    imageView.image = newValue
+    imageView.sizeToFit()
+    scrollView?.contentSize = imageView.frame.size // when image set, the scorllView may be nil
+    spinner?.stopAnimating()// 在prepare时，outlet都没有，spinner也可能没有被赋值
+    }
+}
+```
+
+6. 使用splitViewController适配iPhone和iPad平台时，处于当没有详情页面时，应当显示master控制器
+设置 UISplitViewController的代理，并实现collapseSecondary onto 方法
+这个代理应该在早些设置，可以在awakeFromNib中设置
+```swift
+override func awakeFromNib() {
+    super.awakeFromNib()
+    if let splitViewController = self.splitViewController {
+    splitViewController.delegate = self
+    }
+}
+
+//Return YES to prevent UIKit from applying its default behavior; return NO to request that UIKit
+// perform its default collapsing behavior.
+func splitViewController(_ splitViewController: UISplitViewController, collapseSecondary secondaryViewController: UIViewController, onto primaryViewController: UIViewController) -> Bool {
+// detailViewController没有内容时，返回yes组织，有内容时返回NO使用默认行为
+    if let imageVC = secondaryViewController.contents as? ImageViewController, imageVC.imageURL != nil {
+    return false
+    }else {
+    return true
+    }
+}
+```
